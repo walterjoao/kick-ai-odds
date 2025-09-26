@@ -1,335 +1,228 @@
-import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Clock, Users, Trophy, Target } from "lucide-react";
+import React, { useState, useCallback, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TrendingUp, Calendar, Users, Trophy, BarChart3, Target } from 'lucide-react';
+import { useSportsData } from '@/hooks/useSportsData';
+import OddsFilters from './OddsFilters';
+import OddsTable from './OddsTable';
+import TeamsPlayers from './TeamsPlayers';
 
-// Mock data
-const mockOdds = [
-  {
-    id: 1,
-    homeTeam: "Manchester City",
-    awayTeam: "Arsenal", 
-    kickoff: "2024-09-27 15:30",
-    league: "Premier League",
-    bookmakers: [
-      { name: "Bet365", home: 2.10, draw: 3.40, away: 3.20 },
-      { name: "William Hill", home: 2.05, draw: 3.50, away: 3.30 },
-      { name: "Ladbrokes", home: 2.15, draw: 3.30, away: 3.15 }
-    ]
-  },
-  {
-    id: 2,
-    homeTeam: "Liverpool",
-    awayTeam: "Chelsea",
-    kickoff: "2024-09-27 17:45", 
-    league: "Premier League",
-    bookmakers: [
-      { name: "Bet365", home: 1.85, draw: 3.60, away: 4.20 },
-      { name: "William Hill", home: 1.90, draw: 3.50, away: 4.00 },
-      { name: "Ladbrokes", home: 1.80, draw: 3.70, away: 4.30 }
-    ]
-  }
-];
-
+// Mock data for standings (keeping existing mock data for standings tab)
 const mockStandings = [
   { position: 1, team: "Manchester City", played: 8, won: 7, drawn: 1, lost: 0, points: 22, form: ["W", "W", "D", "W", "W"] },
   { position: 2, team: "Arsenal", played: 8, won: 6, drawn: 2, lost: 0, points: 20, form: ["W", "D", "W", "W", "D"] },
   { position: 3, team: "Liverpool", played: 8, won: 6, drawn: 1, lost: 1, points: 19, form: ["W", "W", "L", "W", "W"] },
-  { position: 4, team: "Chelsea", played: 8, won: 5, drawn: 1, lost: 2, points: 16, form: ["W", "L", "W", "D", "W"] }
+  { position: 4, team: "Chelsea", played: 8, won: 5, drawn: 1, lost: 2, points: 16, form: ["W", "L", "W", "D", "W"] },
+  { position: 5, team: "Tottenham", played: 8, won: 4, drawn: 2, lost: 2, points: 14, form: ["D", "L", "W", "W", "D"] },
+  { position: 6, team: "Newcastle", played: 8, won: 4, drawn: 1, lost: 3, points: 13, form: ["L", "W", "W", "L", "W"] },
+  { position: 7, team: "Brighton", played: 8, won: 3, drawn: 3, lost: 2, points: 12, form: ["D", "W", "D", "L", "D"] },
+  { position: 8, team: "West Ham", played: 8, won: 3, drawn: 2, lost: 3, points: 11, form: ["L", "D", "W", "W", "L"] },
+  { position: 9, team: "Fulham", played: 8, won: 3, drawn: 2, lost: 3, points: 11, form: ["W", "L", "D", "W", "L"] },
+  { position: 10, team: "Brentford", played: 8, won: 2, drawn: 4, lost: 2, points: 10, form: ["D", "D", "L", "D", "W"] }
 ];
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("odds");
+  const { odds, loading, fetchOdds } = useSportsData();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState({
+    sport: 'soccer_epl',
+    region: 'uk',
+    market: 'h2h'
+  });
 
-  const getBestOdds = (bookmakers: any[], type: 'home' | 'draw' | 'away') => {
-    return Math.max(...bookmakers.map(b => b[type]));
-  };
+  useEffect(() => {
+    fetchOdds({ 
+      ...filters, 
+      page: currentPage, 
+      limit: 10 
+    });
+  }, [filters, currentPage, fetchOdds]);
+
+  const handleFilterChange = useCallback((newFilters: typeof filters) => {
+    setFilters(newFilters);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, []);
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    fetchOdds({ 
+      ...filters, 
+      page: currentPage, 
+      limit: 10 
+    });
+  }, [filters, currentPage, fetchOdds]);
 
   const getFormIcon = (result: string) => {
-    switch (result) {
-      case 'W': return <span className="w-6 h-6 bg-success rounded-full flex items-center justify-center text-xs font-bold text-success-foreground">W</span>;
-      case 'D': return <span className="w-6 h-6 bg-warning rounded-full flex items-center justify-center text-xs font-bold text-warning-foreground">D</span>;
-      case 'L': return <span className="w-6 h-6 bg-destructive rounded-full flex items-center justify-center text-xs font-bold text-destructive-foreground">L</span>;
-      default: return null;
-    }
+    const baseClasses = "w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center text-white";
+    if (result === 'W') return <span className={`${baseClasses} bg-green-500`}>W</span>;
+    if (result === 'D') return <span className={`${baseClasses} bg-yellow-500`}>D</span>;
+    if (result === 'L') return <span className={`${baseClasses} bg-red-500`}>L</span>;
+    return null;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-primary rounded-xl flex items-center justify-center animate-glow">
-              <Trophy className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                AI Football Odds & Insights
-              </h1>
-              <p className="text-muted-foreground">Real-time betting odds and AI-powered analysis</p>
-            </div>
-          </div>
-          
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <Card className="card-gradient">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-8 h-8 text-primary" />
-                  <div>
-                    <p className="text-2xl font-bold">12</p>
-                    <p className="text-sm text-muted-foreground">Live Matches</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="card-gradient">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Target className="w-8 h-8 text-success" />
-                  <div>
-                    <p className="text-2xl font-bold">85%</p>
-                    <p className="text-sm text-muted-foreground">Accuracy</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="card-gradient">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <TrendingUp className="w-8 h-8 text-warning" />
-                  <div>
-                    <p className="text-2xl font-bold">€2.4M</p>
-                    <p className="text-sm text-muted-foreground">Volume</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="card-gradient">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Users className="w-8 h-8 text-accent" />
-                  <div>
-                    <p className="text-2xl font-bold">1.2K</p>
-                    <p className="text-sm text-muted-foreground">Users Online</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">
+            AI Football Odds & Insights
+          </h1>
+          <p className="text-gray-300">
+            Real-time betting odds, statistics, and AI-powered predictions
+          </p>
         </div>
 
-        {/* Main Dashboard */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-slide-up">
-          <TabsList className="grid w-full grid-cols-4 mb-6 bg-card/50 backdrop-blur-sm">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <TrendingUp className="h-8 w-8 text-blue-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-muted-foreground">Live Matches</p>
+                <p className="text-2xl font-bold">{odds?.total || 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <BarChart3 className="h-8 w-8 text-green-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-muted-foreground">Best Odds</p>
+                <p className="text-2xl font-bold">Live</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <Users className="h-8 w-8 text-purple-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-muted-foreground">Active Leagues</p>
+                <p className="text-2xl font-bold">50+</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <Target className="h-8 w-8 text-yellow-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-muted-foreground">Markets</p>
+                <p className="text-2xl font-bold">4</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="odds" className="flex items-center gap-2">
-              <Target className="w-4 h-4" />
-              Odds
+              <TrendingUp className="h-4 w-4" />
+              Live Odds
             </TabsTrigger>
             <TabsTrigger value="fixtures" className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
+              <Calendar className="h-4 w-4" />
               Fixtures
             </TabsTrigger>
             <TabsTrigger value="standings" className="flex items-center gap-2">
-              <Trophy className="w-4 h-4" />
+              <Trophy className="h-4 w-4" />
               Standings
             </TabsTrigger>
             <TabsTrigger value="teams" className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Teams
+              <Users className="h-4 w-4" />
+              Teams & Players
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="odds" className="space-y-6">
-            <Card className="card-gradient">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary" />
-                  Live Betting Odds
-                </CardTitle>
-                <CardDescription>
-                  Real-time odds from multiple bookmakers
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {mockOdds.map((match) => (
-                    <div key={match.id} className="p-4 bg-secondary/50 rounded-lg border border-border/50">
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Badge variant="outline" className="text-primary border-primary/20 bg-primary/10">
-                              {match.league}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">{match.kickoff}</span>
-                          </div>
-                          <h3 className="text-lg font-semibold">
-                            {match.homeTeam} vs {match.awayTeam}
-                          </h3>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-2 lg:gap-4 min-w-[300px]">
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Home</p>
-                            <div className="space-y-1">
-                              {match.bookmakers.map((bookmaker, idx) => (
-                                <div key={idx} className={`px-3 py-1 rounded text-sm font-medium ${
-                                  bookmaker.home === getBestOdds(match.bookmakers, 'home') 
-                                    ? 'odds-highlight' 
-                                    : 'bg-muted text-muted-foreground'
-                                }`}>
-                                  {bookmaker.home}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Draw</p>
-                            <div className="space-y-1">
-                              {match.bookmakers.map((bookmaker, idx) => (
-                                <div key={idx} className={`px-3 py-1 rounded text-sm font-medium ${
-                                  bookmaker.draw === getBestOdds(match.bookmakers, 'draw') 
-                                    ? 'odds-highlight' 
-                                    : 'bg-muted text-muted-foreground'
-                                }`}>
-                                  {bookmaker.draw}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Away</p>
-                            <div className="space-y-1">
-                              {match.bookmakers.map((bookmaker, idx) => (
-                                <div key={idx} className={`px-3 py-1 rounded text-sm font-medium ${
-                                  bookmaker.away === getBestOdds(match.bookmakers, 'away') 
-                                    ? 'odds-highlight' 
-                                    : 'bg-muted text-muted-foreground'
-                                }`}>
-                                  {bookmaker.away}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+          <TabsContent value="odds">
+            <OddsFilters 
+              onFilterChange={handleFilterChange}
+              onRefresh={handleRefresh}
+              loading={loading}
+            />
+            <OddsTable 
+              oddsData={odds}
+              loading={loading}
+              onPageChange={handlePageChange}
+            />
+          </TabsContent>
+
+          <TabsContent value="fixtures">
+            <Card>
+              <CardContent className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-lg font-medium">Fixtures & Results</p>
+                  <p className="text-muted-foreground">Coming soon - Match fixtures, results, and detailed statistics</p>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="standings" className="space-y-6">
-            <Card className="card-gradient">
+          <TabsContent value="standings">
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-primary" />
+                  <Trophy className="h-5 w-5" />
                   Premier League Table
                 </CardTitle>
-                <CardDescription>
-                  Current season standings
-                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border/50">
-                        <th className="text-left p-3 text-sm font-medium text-muted-foreground">Pos</th>
-                        <th className="text-left p-3 text-sm font-medium text-muted-foreground">Team</th>
-                        <th className="text-center p-3 text-sm font-medium text-muted-foreground">P</th>
-                        <th className="text-center p-3 text-sm font-medium text-muted-foreground">W</th>
-                        <th className="text-center p-3 text-sm font-medium text-muted-foreground">D</th>
-                        <th className="text-center p-3 text-sm font-medium text-muted-foreground">L</th>
-                        <th className="text-center p-3 text-sm font-medium text-muted-foreground">Pts</th>
-                        <th className="text-center p-3 text-sm font-medium text-muted-foreground">Form</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockStandings.map((team) => (
-                        <tr key={team.position} className="border-b border-border/20 hover:bg-muted/20 transition-colors">
-                          <td className="p-3">
-                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
-                              team.position <= 4 ? 'bg-success text-success-foreground' : 
-                              team.position <= 6 ? 'bg-warning text-warning-foreground' : 
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {team.position}
-                            </span>
-                          </td>
-                          <td className="p-3 font-semibold">{team.team}</td>
-                          <td className="p-3 text-center">{team.played}</td>
-                          <td className="p-3 text-center text-success font-medium">{team.won}</td>
-                          <td className="p-3 text-center text-warning font-medium">{team.drawn}</td>
-                          <td className="p-3 text-center text-destructive font-medium">{team.lost}</td>
-                          <td className="p-3 text-center font-bold text-primary">{team.points}</td>
-                          <td className="p-3">
-                            <div className="flex items-center justify-center gap-1">
-                              {team.form.map((result, idx) => (
-                                <div key={idx}>
-                                  {getFormIcon(result)}
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">Pos</TableHead>
+                      <TableHead>Team</TableHead>
+                      <TableHead className="text-center">Played</TableHead>
+                      <TableHead className="text-center">Won</TableHead>
+                      <TableHead className="text-center">Drawn</TableHead>
+                      <TableHead className="text-center">Lost</TableHead>
+                      <TableHead className="text-center">Points</TableHead>
+                      <TableHead>Form</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mockStandings.map((team) => (
+                      <TableRow key={team.position}>
+                        <TableCell className="font-medium">{team.position}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium">{team.team}</span>
+                            {team.position <= 4 && (
+                              <Badge variant="secondary" className="text-xs">UCL</Badge>
+                            )}
+                            {team.position === 5 && (
+                              <Badge variant="outline" className="text-xs">UEL</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{team.played}</TableCell>
+                        <TableCell className="text-center">{team.won}</TableCell>
+                        <TableCell className="text-center">{team.drawn}</TableCell>
+                        <TableCell className="text-center">{team.lost}</TableCell>
+                        <TableCell className="text-center font-bold">{team.points}</TableCell>
+                        <TableCell>
+                          <div className="flex space-x-1">
+                            {team.form.map((result, index) => (
+                              <div key={index}>{getFormIcon(result)}</div>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="fixtures" className="space-y-6">
-            <Card className="card-gradient">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-primary" />
-                  Upcoming Fixtures
-                </CardTitle>
-                <CardDescription>
-                  Next matches and schedules
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Clock className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">Fixture data coming soon...</p>
-                  <p className="text-sm">Integration with API-Football in progress</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="teams" className="space-y-6">
-            <Card className="card-gradient">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" />
-                  Team Statistics
-                </CardTitle>
-                <CardDescription>
-                  Detailed team and player data
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">Team statistics coming soon...</p>
-                  <p className="text-sm">Comprehensive player and team analytics</p>
-                </div>
-              </CardContent>
-            </Card>
+          <TabsContent value="teams">
+            <TeamsPlayers />
           </TabsContent>
         </Tabs>
       </div>
