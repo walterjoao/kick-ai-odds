@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, TrendingUp, Trophy } from 'lucide-react';
+import { Calendar, Clock, TrendingUp, Trophy, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Fixture {
   id: string;
@@ -96,10 +98,39 @@ const FixturesResults: React.FC<FixturesResultsProps> = ({
   };
 
   const MatchCard: React.FC<{ fixture: Fixture }> = ({ fixture }) => {
+    const [isOpen, setIsOpen] = useState(false);
     const homeProb = getWinProbability(fixture, fixture.home_team);
     const awayProb = getWinProbability(fixture, fixture.away_team);
     const homeOdds = getAverageOdds(fixture, fixture.home_team);
     const awayOdds = getAverageOdds(fixture, fixture.away_team);
+
+    const getDrawOdds = () => {
+      if (!fixture.bookmakers || fixture.bookmakers.length === 0) return null;
+      const odds: number[] = [];
+      fixture.bookmakers.forEach(bookmaker => {
+        const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
+        const drawOutcome = h2hMarket?.outcomes.find(o => o.name === 'Draw');
+        if (drawOutcome) odds.push(drawOutcome.price);
+      });
+      if (odds.length === 0) return null;
+      return (odds.reduce((a, b) => a + b, 0) / odds.length).toFixed(2);
+    };
+
+    const getBestOdds = (team: string) => {
+      if (!fixture.bookmakers || fixture.bookmakers.length === 0) return null;
+      const odds: number[] = [];
+      fixture.bookmakers.forEach(bookmaker => {
+        const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
+        const outcome = h2hMarket?.outcomes.find(o => o.name === team);
+        if (outcome) odds.push(outcome.price);
+      });
+      if (odds.length === 0) return null;
+      return Math.max(...odds).toFixed(2);
+    };
+
+    const drawOdds = getDrawOdds();
+    const bestHomeOdds = getBestOdds(fixture.home_team);
+    const bestAwayOdds = getBestOdds(fixture.away_team);
 
     return (
       <Card className="mb-4 hover:shadow-lg transition-shadow">
@@ -119,7 +150,7 @@ const FixturesResults: React.FC<FixturesResultsProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-center">
+          <div className="grid grid-cols-3 gap-4 items-center mb-4">
             {/* Home Team */}
             <div className="text-center">
               <h3 className="font-bold text-lg mb-2">{fixture.home_team}</h3>
@@ -128,11 +159,18 @@ const FixturesResults: React.FC<FixturesResultsProps> = ({
                   {homeProb}% Win
                 </Badge>
               )}
-              {homeOdds && (
-                <p className="text-sm text-muted-foreground">
-                  Avg Odds: {homeOdds}
-                </p>
-              )}
+              <div className="mt-2 space-y-1">
+                {homeOdds && (
+                  <p className="text-sm text-muted-foreground">
+                    Avg: {homeOdds}
+                  </p>
+                )}
+                {bestHomeOdds && (
+                  <p className="text-sm font-semibold text-primary">
+                    Best: {bestHomeOdds}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* VS */}
@@ -143,6 +181,12 @@ const FixturesResults: React.FC<FixturesResultsProps> = ({
               <Badge className="mt-2" variant="outline">
                 {fixture.sport_title}
               </Badge>
+              {drawOdds && (
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground">Draw</p>
+                  <p className="text-sm font-semibold">{drawOdds}</p>
+                </div>
+              )}
             </div>
 
             {/* Away Team */}
@@ -153,26 +197,112 @@ const FixturesResults: React.FC<FixturesResultsProps> = ({
                   {awayProb}% Win
                 </Badge>
               )}
-              {awayOdds && (
-                <p className="text-sm text-muted-foreground">
-                  Avg Odds: {awayOdds}
-                </p>
-              )}
+              <div className="mt-2 space-y-1">
+                {awayOdds && (
+                  <p className="text-sm text-muted-foreground">
+                    Avg: {awayOdds}
+                  </p>
+                )}
+                {bestAwayOdds && (
+                  <p className="text-sm font-semibold text-primary">
+                    Best: {bestAwayOdds}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Bookmakers Info */}
-          {fixture.bookmakers && fixture.bookmakers.length > 0 && (
-            <div className="mt-4 pt-4 border-t">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground flex items-center gap-1">
-                  <TrendingUp className="h-4 w-4" />
-                  {fixture.bookmakers.length} Bookmakers offering odds
-                </span>
-                {fixture.is_past && (
-                  <Badge variant="outline">Match Concluded</Badge>
-                )}
+          {/* Match Statistics Summary */}
+          <div className="grid grid-cols-3 gap-4 py-3 border-y">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-1">Home Win Prob</p>
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-full bg-secondary rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all" 
+                    style={{ width: `${homeProb || 0}%` }}
+                  />
+                </div>
+                <span className="text-sm font-bold min-w-[3rem]">{homeProb}%</span>
               </div>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-1">Bookmakers</p>
+              <p className="text-lg font-bold">{fixture.bookmakers?.length || 0}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-1">Away Win Prob</p>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-sm font-bold min-w-[3rem]">{awayProb}%</span>
+                <div className="w-full bg-secondary rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all" 
+                    style={{ width: `${awayProb || 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Bookmaker Odds */}
+          {fixture.bookmakers && fixture.bookmakers.length > 0 && (
+            <Collapsible open={isOpen} onOpenChange={setIsOpen} className="mt-4">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Detailed Odds from {fixture.bookmakers.length} Bookmakers
+                  </span>
+                  {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-4">
+                <div className="space-y-3">
+                  {fixture.bookmakers.map((bookmaker) => {
+                    const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
+                    if (!h2hMarket) return null;
+
+                    const homeOutcome = h2hMarket.outcomes.find(o => o.name === fixture.home_team);
+                    const awayOutcome = h2hMarket.outcomes.find(o => o.name === fixture.away_team);
+                    const drawOutcome = h2hMarket.outcomes.find(o => o.name === 'Draw');
+
+                    return (
+                      <Card key={bookmaker.key} className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold">{bookmaker.title}</h4>
+                          {fixture.is_past && (
+                            <Badge variant="outline" className="text-xs">Historical</Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Home</p>
+                            <p className="text-lg font-bold">{homeOutcome?.price.toFixed(2) || 'N/A'}</p>
+                          </div>
+                          {drawOutcome && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Draw</p>
+                              <p className="text-lg font-bold">{drawOutcome.price.toFixed(2)}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Away</p>
+                            <p className="text-lg font-bold">{awayOutcome?.price.toFixed(2) || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {fixture.is_past && (
+            <div className="mt-4 pt-4 border-t">
+              <Badge variant="outline" className="w-full justify-center">
+                Match Concluded
+              </Badge>
             </div>
           )}
         </CardContent>
