@@ -8,6 +8,7 @@ import { useSportsData } from '@/hooks/useSportsData';
 import OddsFilters from './OddsFilters';
 import OddsTable from './OddsTable';
 import TeamsPlayers from './TeamsPlayers';
+import FixturesResults from './FixturesResults';
 
 // Mock data for standings (keeping existing mock data for standings tab)
 const mockStandings = [
@@ -153,15 +154,7 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="fixtures">
-            <Card>
-              <CardContent className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-lg font-medium">Fixtures & Results</p>
-                  <p className="text-muted-foreground">Coming soon - Match fixtures, results, and detailed statistics</p>
-                </div>
-              </CardContent>
-            </Card>
+            <FixturesResults sport={filters.sport} region={filters.region} />
           </TabsContent>
 
           <TabsContent value="standings">

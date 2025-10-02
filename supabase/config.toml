@@ -20,5 +20,8 @@ verify_jwt = false
 [functions.fetch-odds]
 verify_jwt = false
 
+[functions.fetch-fixtures]
+verify_jwt = false
+
 [functions.fetch-leagues]
 verify_jwt = false
