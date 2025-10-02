@@ -158,64 +158,28 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="standings">
-            <Card>
+            <OddsFilters 
+              onFilterChange={handleFilterChange}
+              onRefresh={handleRefresh}
+              loading={loading}
+            />
+            <Card className="mt-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Trophy className="h-5 w-5" />
-                  Premier League Table
+                  League Standings
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]">Pos</TableHead>
-                      <TableHead>Team</TableHead>
-                      <TableHead className="text-center">Played</TableHead>
-                      <TableHead className="text-center">Won</TableHead>
-                      <TableHead className="text-center">Drawn</TableHead>
-                      <TableHead className="text-center">Lost</TableHead>
-                      <TableHead className="text-center">Points</TableHead>
-                      <TableHead>Form</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockStandings.map((team) => (
-                      <TableRow key={team.position}>
-                        <TableCell className="font-medium">{team.position}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium">{team.team}</span>
-                            {team.position <= 4 && (
-                              <Badge variant="secondary" className="text-xs">UCL</Badge>
-                            )}
-                            {team.position === 5 && (
-                              <Badge variant="outline" className="text-xs">UEL</Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">{team.played}</TableCell>
-                        <TableCell className="text-center">{team.won}</TableCell>
-                        <TableCell className="text-center">{team.drawn}</TableCell>
-                        <TableCell className="text-center">{team.lost}</TableCell>
-                        <TableCell className="text-center font-bold">{team.points}</TableCell>
-                        <TableCell>
-                          <div className="flex space-x-1">
-                            {team.form.map((result, index) => (
-                              <div key={index}>{getFormIcon(result)}</div>
-                            ))}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="text-center text-muted-foreground py-8">
+                  Standings data will be populated based on selected sport and region
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="teams">
-            <TeamsPlayers />
+            <TeamsPlayers sport={filters.sport} region={filters.region} market={filters.market} />
           </TabsContent>
         </Tabs>
       </div>

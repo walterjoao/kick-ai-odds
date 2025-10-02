@@ -1,306 +1,283 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Users, User, Trophy, Target, Calendar } from 'lucide-react';
+import { Users, ChevronDown, ChevronUp, Calendar, TrendingUp, Award, AlertCircle } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { supabase } from '@/integrations/supabase/client';
+import OddsFilters from './OddsFilters';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Mock data for teams and players
-const mockTeams = [
-  {
-    id: '1',
-    name: 'Manchester City',
-    league: 'Premier League',
-    founded: 1880,
-    stadium: 'Etihad Stadium',
-    manager: 'Pep Guardiola',
-    form: ['W', 'W', 'D', 'W', 'W'],
-    stats: {
-      position: 1,
-      played: 20,
-      won: 15,
-      drawn: 3,
-      lost: 2,
-      points: 48,
-      goalsFor: 45,
-      goalsAgainst: 15
-    }
-  },
-  {
-    id: '2',
-    name: 'Arsenal',
-    league: 'Premier League',
-    founded: 1886,
-    stadium: 'Emirates Stadium',
-    manager: 'Mikel Arteta',
-    form: ['W', 'L', 'W', 'W', 'D'],
-    stats: {
-      position: 2,
-      played: 20,
-      won: 14,
-      drawn: 4,
-      lost: 2,
-      points: 46,
-      goalsFor: 42,
-      goalsAgainst: 18
-    }
-  },
-  {
-    id: '3',
-    name: 'Liverpool',
-    league: 'Premier League',
-    founded: 1892,
-    stadium: 'Anfield',
-    manager: 'Jürgen Klopp',
-    form: ['W', 'W', 'W', 'L', 'W'],
-    stats: {
-      position: 3,
-      played: 20,
-      won: 13,
-      drawn: 5,
-      lost: 2,
-      points: 44,
-      goalsFor: 40,
-      goalsAgainst: 20
-    }
-  }
-];
+interface TeamData {
+  team: string;
+  nextMatches: Array<{
+    opponent: string;
+    date: string;
+    homeTeam: string;
+    awayTeam: string;
+  }>;
+  pastMatches: Array<{
+    opponent: string;
+    date: string;
+    homeTeam: string;
+    awayTeam: string;
+    result?: string;
+  }>;
+}
 
-const mockPlayers = [
-  {
-    id: '1',
-    name: 'Erling Haaland',
-    team: 'Manchester City',
-    position: 'Forward',
-    age: 23,
-    nationality: 'Norway',
-    stats: {
-      appearances: 18,
-      goals: 22,
-      assists: 5,
-      yellowCards: 2,
-      redCards: 0,
-      minutesPlayed: 1620
+interface TeamsPlayersProps {
+  sport: string;
+  region: string;
+  market: string;
+}
+
+const TeamsPlayers: React.FC<TeamsPlayersProps> = ({ sport, region, market }) => {
+  const [filters, setFilters] = useState({ sport, region, market });
+  const [teams, setTeams] = useState<TeamData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<{[key: string]: string}>({});
+
+  useEffect(() => {
+    setFilters({ sport, region, market });
+  }, [sport, region, market]);
+
+  useEffect(() => {
+    fetchTeamsData();
+  }, [filters]);
+
+  const fetchTeamsData = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.functions.invoke('fetch-fixtures', {
+        body: { sport: filters.sport, region: filters.region }
+      });
+
+      if (error) throw error;
+
+      // Process upcoming and past matches to extract teams
+      const teamsMap = new Map<string, TeamData>();
+      
+      // Process upcoming matches
+      data.upcoming?.forEach((match: any) => {
+        const homeTeam = match.home_team;
+        const awayTeam = match.away_team;
+        
+        // Add home team
+        if (!teamsMap.has(homeTeam)) {
+          teamsMap.set(homeTeam, { team: homeTeam, nextMatches: [], pastMatches: [] });
+        }
+        teamsMap.get(homeTeam)!.nextMatches.push({
+          opponent: awayTeam,
+          date: match.commence_time,
+          homeTeam: match.home_team,
+          awayTeam: match.away_team
+        });
+
+        // Add away team
+        if (!teamsMap.has(awayTeam)) {
+          teamsMap.set(awayTeam, { team: awayTeam, nextMatches: [], pastMatches: [] });
+        }
+        teamsMap.get(awayTeam)!.nextMatches.push({
+          opponent: homeTeam,
+          date: match.commence_time,
+          homeTeam: match.home_team,
+          awayTeam: match.away_team
+        });
+      });
+
+      // Process past matches
+      data.past?.forEach((match: any) => {
+        const homeTeam = match.home_team;
+        const awayTeam = match.away_team;
+        
+        if (teamsMap.has(homeTeam)) {
+          teamsMap.get(homeTeam)!.pastMatches.push({
+            opponent: awayTeam,
+            date: match.commence_time,
+            homeTeam: match.home_team,
+            awayTeam: match.away_team
+          });
+        }
+
+        if (teamsMap.has(awayTeam)) {
+          teamsMap.get(awayTeam)!.pastMatches.push({
+            opponent: homeTeam,
+            date: match.commence_time,
+            homeTeam: match.home_team,
+            awayTeam: match.away_team
+          });
+        }
+      });
+
+      setTeams(Array.from(teamsMap.values()).sort((a, b) => a.team.localeCompare(b.team)));
+    } catch (err) {
+      console.error('Error fetching teams data:', err);
+    } finally {
+      setLoading(false);
     }
-  },
-  {
-    id: '2',
-    name: 'Bukayo Saka',
-    team: 'Arsenal',
-    position: 'Winger',
-    age: 22,
-    nationality: 'England',
-    stats: {
-      appearances: 19,
-      goals: 8,
-      assists: 9,
-      yellowCards: 3,
-      redCards: 0,
-      minutesPlayed: 1710
-    }
-  },
-  {
-    id: '3',
-    name: 'Mohamed Salah',
-    team: 'Liverpool',
-    position: 'Forward',
-    age: 31,
-    nationality: 'Egypt',
-    stats: {
-      appearances: 20,
-      goals: 18,
-      assists: 7,
-      yellowCards: 1,
-      redCards: 0,
-      minutesPlayed: 1800
-    }
-  }
-];
+  };
 
-const TeamsPlayers: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('teams');
+  const toggleTeamExpansion = (teamName: string) => {
+    setExpandedTeam(expandedTeam === teamName ? null : teamName);
+    setExpandedSection({});
+  };
 
-  const filteredTeams = mockTeams.filter(team =>
-    team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    team.league.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    team.manager.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const toggleSection = (teamName: string, section: string) => {
+    setExpandedSection(prev => ({
+      ...prev,
+      [teamName]: prev[teamName] === section ? '' : section
+    }));
+  };
 
-  const filteredPlayers = mockPlayers.filter(player =>
-    player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    player.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    player.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    player.nationality.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getFormIcon = (result: string) => {
-    const baseClasses = "w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center text-white";
-    if (result === 'W') return <span className={`${baseClasses} bg-green-500`}>W</span>;
-    if (result === 'D') return <span className={`${baseClasses} bg-yellow-500`}>D</span>;
-    if (result === 'L') return <span className={`${baseClasses} bg-red-500`}>L</span>;
-    return null;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
     <div className="space-y-6">
+      <OddsFilters 
+        onFilterChange={setFilters}
+        onRefresh={fetchTeamsData}
+        loading={loading}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Teams & Players Database
+            Teams Database ({teams.length} teams)
           </CardTitle>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search teams, players, positions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="teams" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Teams ({filteredTeams.length})
-              </TabsTrigger>
-              <TabsTrigger value="players" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Players ({filteredPlayers.length})
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="teams" className="space-y-4 mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredTeams.map((team) => (
-                  <Card key={team.id} className="hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{team.name}</CardTitle>
-                          <Badge variant="secondary" className="mt-1">
-                            {team.league}
-                          </Badge>
-                        </div>
-                        <Badge variant="outline" className="text-lg font-bold">
-                          #{team.stats.position}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Manager:</span>
-                          <div className="font-medium">{team.manager}</div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Stadium:</span>
-                          <div className="font-medium">{team.stadium}</div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Founded:</span>
-                          <div className="font-medium">{team.founded}</div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Points:</span>
-                          <div className="font-bold text-primary">{team.stats.points}</div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-sm text-muted-foreground">Recent Form:</span>
-                        <div className="flex gap-1 mt-1">
-                          {team.form.map((result, index) => (
-                            <div key={index}>{getFormIcon(result)}</div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-green-600">{team.stats.won}</div>
-                          <div className="text-muted-foreground">Won</div>
-                        </div>
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-yellow-600">{team.stats.drawn}</div>
-                          <div className="text-muted-foreground">Drawn</div>
-                        </div>
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-red-600">{team.stats.lost}</div>
-                          <div className="text-muted-foreground">Lost</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="players" className="space-y-4 mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPlayers.map((player) => (
-                  <Card key={player.id} className="hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{player.name}</CardTitle>
-                          <Badge variant="secondary" className="mt-1">
-                            {player.team}
-                          </Badge>
-                        </div>
-                        <Badge variant="outline">
-                          Age {player.age}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Position:</span>
-                          <div className="font-medium">{player.position}</div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Nationality:</span>
-                          <div className="font-medium">{player.nationality}</div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-primary flex items-center justify-center gap-1">
-                            <Target className="h-3 w-3" />
-                            {player.stats.goals}
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : teams.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No teams found for the selected filters</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {teams.map((team) => (
+                <Card key={team.team} className="overflow-hidden">
+                  <Collapsible
+                    open={expandedTeam === team.team}
+                    onOpenChange={() => toggleTeamExpansion(team.team)}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <div className="p-4 hover:bg-muted/50 cursor-pointer transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Users className="h-5 w-5 text-primary" />
+                            <div>
+                              <h3 className="font-semibold text-lg">{team.team}</h3>
+                              <div className="flex gap-4 text-sm text-muted-foreground mt-1">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {team.nextMatches.length} upcoming
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <TrendingUp className="h-3 w-3" />
+                                  {team.pastMatches.length} past
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-muted-foreground">Goals</div>
-                        </div>
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-blue-600">{player.stats.assists}</div>
-                          <div className="text-muted-foreground">Assists</div>
-                        </div>
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-green-600">{player.stats.appearances}</div>
-                          <div className="text-muted-foreground">Apps</div>
-                        </div>
-                        <div className="text-center p-2 bg-muted rounded">
-                          <div className="font-bold text-orange-600">{Math.round(player.stats.minutesPlayed / player.stats.appearances)}</div>
-                          <div className="text-muted-foreground">Avg Min</div>
+                          {expandedTeam === team.team ? (
+                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
+                    </CollapsibleTrigger>
 
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Yellow: {player.stats.yellowCards}</span>
-                        <span>Red: {player.stats.redCards}</span>
+                    <CollapsibleContent>
+                      <div className="border-t bg-muted/30">
+                        <Tabs defaultValue="next" className="w-full">
+                          <TabsList className="w-full grid grid-cols-2 rounded-none">
+                            <TabsTrigger value="next">
+                              Next Matches ({team.nextMatches.length})
+                            </TabsTrigger>
+                            <TabsTrigger value="past">
+                              Past Matches ({team.pastMatches.length})
+                            </TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="next" className="p-4 space-y-2">
+                            {team.nextMatches.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No upcoming matches
+                              </p>
+                            ) : (
+                              team.nextMatches.map((match, idx) => (
+                                <div 
+                                  key={idx}
+                                  className="p-3 bg-background rounded-lg border flex items-center justify-between"
+                                >
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">
+                                      {match.homeTeam} vs {match.awayTeam}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {formatDate(match.date)}
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs">
+                                    {match.homeTeam === team.team ? 'Home' : 'Away'}
+                                  </Badge>
+                                </div>
+                              ))
+                            )}
+                          </TabsContent>
+
+                          <TabsContent value="past" className="p-4 space-y-2">
+                            {team.pastMatches.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No past matches available
+                              </p>
+                            ) : (
+                              team.pastMatches.map((match, idx) => (
+                                <div 
+                                  key={idx}
+                                  className="p-3 bg-background rounded-lg border flex items-center justify-between"
+                                >
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">
+                                      {match.homeTeam} vs {match.awayTeam}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {formatDate(match.date)}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {match.homeTeam === team.team ? 'Home' : 'Away'}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </TabsContent>
+                        </Tabs>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </TabsContent>
-          </Tabs>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
